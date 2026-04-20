@@ -30,6 +30,7 @@ export interface InstanceRuntimeInfo {
   openFrpStatus: boolean;
   latency: number;
   cpuUsage?: number;
+  cpuLimit?: number;
   memoryUsagePercent?: number;
   rxBytes?: number;
   txBytes?: number;

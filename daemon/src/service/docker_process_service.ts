@@ -127,22 +127,18 @@ export class SetupDockerContainer extends AsyncTask {
     if (typeof dockerConfig.memory === "number" && dockerConfig.memory > 0)
       maxMemory = dockerConfig.memory * 1024 * 1024;
 
-    // CPU usage calculation
+    // CPU limit calculation. cpuUsage is kept as a compatibility fallback for old configs:
+    // old value 100% equals one CPU core.
     let cpuQuota: number | undefined = undefined;
     let cpuPeriod: number | undefined = undefined;
-    if (typeof dockerConfig.cpuUsage === "number" && dockerConfig.cpuUsage > 0) {
-      cpuQuota = dockerConfig.cpuUsage * 10 * 1000;
+    if (typeof dockerConfig.cpuLimit === "number") {
+      if (dockerConfig.cpuLimit > 0) {
+        cpuPeriod = 1000 * 1000;
+        cpuQuota = Math.round(dockerConfig.cpuLimit * cpuPeriod);
+      }
+    } else if (typeof dockerConfig.cpuUsage === "number" && dockerConfig.cpuUsage > 0) {
       cpuPeriod = 1000 * 1000;
-    }
-
-    // Check the number of CPU cores
-    let cpusetCpus: string | undefined = undefined;
-    if (dockerConfig.cpusetCpus) {
-      const arr = dockerConfig.cpusetCpus.split(",");
-      arr.forEach((v: string) => {
-        if (isNaN(Number(v))) throw new Error($t("TXT_CODE_instance.invalidCpu", { v }));
-      });
-      cpusetCpus = dockerConfig.cpusetCpus;
+      cpuQuota = Math.round((dockerConfig.cpuUsage / 100) * cpuPeriod);
     }
 
     // memory swap and swappiness
@@ -393,7 +389,6 @@ export class SetupDockerContainer extends AsyncTask {
         MemorySwap: memorySwap,
         MemorySwappiness: memorySwappiness,
         AutoRemove: true,
-        CpusetCpus: cpusetCpus,
         CpuPeriod: cpuPeriod,
         CpuQuota: cpuQuota,
         PortBindings: publicPortArray,

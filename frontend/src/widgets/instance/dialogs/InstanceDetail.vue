@@ -163,6 +163,17 @@ const formRules = computed<Record<string, any>>(() => ({
 const templateIndex = ref<number>(-1);
 const { languageOptions } = useMarketPackages();
 
+const initCpuLimit = (docker?: IGlobalInstanceDockerConfig) => {
+  if (!docker) return;
+  if (
+    typeof docker.cpuLimit !== "number" &&
+    typeof docker.cpuUsage === "number" &&
+    docker.cpuUsage > 0
+  ) {
+    docker.cpuLimit = Number((docker.cpuUsage / 100).toFixed(2));
+  }
+};
+
 const initFormDetail = () => {
   if (props.instanceInfo) {
     formData.value.instance = {
@@ -184,6 +195,7 @@ const initFormDetail = () => {
       imageSelectMethod: "SELECT"
     };
   }
+  initCpuLimit(formData.value.instance.config?.docker);
   initGpuAllocMode();
   initGpuDeviceIdsText();
 };
@@ -348,6 +360,7 @@ const encodeFormData = () => {
       ?.split(",")
       ?.map((v) => v.trim())
       ?.filter((v) => v !== "");
+    postData.config.docker.cpusetCpus = "";
 
     // Encode GPU device IDs from comma-separated text
     if (gpuAllocMode.value === "deviceIds") {
@@ -1370,32 +1383,10 @@ defineExpose({
                       {{ t("TXT_CODE_dce87e42") }}
                     </template>
                     <a-input
-                      v-model:value="formData.instance.config.docker.cpuUsage"
+                      v-model:value="formData.instance.config.docker.cpuLimit"
                       :allow-clear="true"
                       :placeholder="t('TXT_CODE_91d857f5')"
-                      suffix="%"
-                    />
-                  </a-tooltip>
-                </a-form-item>
-              </a-col>
-              <a-col :xs="24" :lg="8" :offset="0">
-                <a-form-item>
-                  <a-typography-title :level="5">{{ t("TXT_CODE_b0c4e4ae") }}</a-typography-title>
-                  <a-typography-paragraph>
-                    <a-tooltip :title="t('TXT_CODE_2b9e9b5')" placement="top">
-                      <a-typography-text type="secondary" class="typography-text-ellipsis">
-                        {{ t("TXT_CODE_2b9e9b5") }}
-                      </a-typography-text>
-                    </a-tooltip>
-                  </a-typography-paragraph>
-                  <a-tooltip placement="bottom">
-                    <template #title>
-                      {{ t("TXT_CODE_67c765be") }}
-                    </template>
-                    <a-input
-                      v-model:value="formData.instance.config.docker.cpusetCpus"
-                      :allow-clear="true"
-                      :placeholder="t('TXT_CODE_30fe1717')"
+                      suffix="vCPU"
                     />
                   </a-tooltip>
                 </a-form-item>

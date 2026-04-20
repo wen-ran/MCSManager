@@ -86,8 +86,12 @@ declare global {
     io?: number;
     networkMode?: string;
     networkAliases?: string[];
-    cpusetCpus?: string;
+    /** CPU limit in cores; 1 = one core, 0 = unlimited */
+    cpuLimit?: number;
+    /** @deprecated Use cpuLimit instead. This was percentage-based. */
     cpuUsage?: number;
+    /** @deprecated CPU core pinning is no longer exposed. */
+    cpusetCpus?: string;
     workingDir?: string;
     env?: string[];
     changeWorkdir?: boolean;

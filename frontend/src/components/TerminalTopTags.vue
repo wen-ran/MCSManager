@@ -12,6 +12,7 @@ import { computed, type Component } from "vue";
 
 interface TerminalRuntimeInfo {
   cpuUsage?: number;
+  cpuLimit?: number;
   memoryUsage?: number;
   memoryLimit?: number;
   memoryUsagePercent?: number;
@@ -23,6 +24,17 @@ interface TerminalRuntimeInfo {
   networkStatsSource?: "docker";
   storageUsage?: number;
   storageLimit?: number;
+}
+
+interface TerminalRuntimeConfig {
+  processType?: string;
+  docker?: {
+    cpuLimit?: number;
+    cpuUsage?: number;
+    memory?: number;
+    maxSpace?: number;
+    image?: string;
+  };
 }
 
 interface PerfCardItem {
@@ -37,6 +49,7 @@ interface PerfCardItem {
 
 const props = defineProps<{
   info?: TerminalRuntimeInfo | null;
+  config?: TerminalRuntimeConfig | null;
   isStopped: boolean;
 }>();
 
@@ -47,10 +60,70 @@ const prettyBytesConfig: PrettyOptions = {
   binary: true
 };
 
-const formatMemoryUsage = (usage?: number, limit?: number) => {
-  const fUsage = prettyBytes(usage ?? 0, prettyBytesConfig);
-  const fLimit = prettyBytes(limit ?? 0, prettyBytesConfig);
-  return limit ? `${fUsage} / ${fLimit}` : fUsage;
+const unlimitedText = () => t("TXT_CODE_a92df201");
+
+const toSafeNumber = (value?: number) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.max(value, 0) : 0;
+
+const formatPercentUsage = (usage?: number, limit?: number) => {
+  const fUsage = `${Math.round(toSafeNumber(usage))}%`;
+  const fLimit = typeof limit === "number" && limit > 0 ? `${Math.round(limit)}%` : unlimitedText();
+  return `${fUsage} / ${fLimit}`;
+};
+
+const formatByteUsage = (usage?: number, limit?: number) => {
+  const fUsage = prettyBytes(toSafeNumber(usage), prettyBytesConfig);
+  const fLimit =
+    typeof limit === "number" && limit > 0
+      ? prettyBytes(limit, prettyBytesConfig)
+      : unlimitedText();
+  return `${fUsage} / ${fLimit}`;
+};
+
+const getUsagePercent = (usage?: number, limit?: number) => {
+  const safeUsage = toSafeNumber(usage);
+  if (typeof limit === "number" && limit > 0) {
+    return Math.min((safeUsage / limit) * 100, 100);
+  }
+  return Math.min(safeUsage, 100);
+};
+
+const getCpuStatus = (usage?: number, limit?: number) => {
+  if (typeof limit === "number" && limit > 0) {
+    const percent = getUsagePercent(usage, limit);
+    if (percent >= 90) return "error";
+    if (percent >= 75) return "warning";
+    return "normal";
+  }
+  return usage != null && usage > 600
+    ? "error"
+    : usage != null && usage > 200
+    ? "warning"
+    : "normal";
+};
+
+const isDockerInstance = (config?: TerminalRuntimeConfig | null) =>
+  config?.processType === "docker" || Boolean(config?.docker?.image);
+
+const getConfigCpuLimit = (config?: TerminalRuntimeConfig | null) => {
+  const docker = config?.docker;
+  if (typeof docker?.cpuLimit === "number" && docker.cpuLimit > 0) {
+    return Math.round(docker.cpuLimit * 100);
+  }
+  if (typeof docker?.cpuUsage === "number" && docker.cpuUsage > 0) {
+    return docker.cpuUsage;
+  }
+  return undefined;
+};
+
+const getConfigMemoryLimit = (config?: TerminalRuntimeConfig | null) => {
+  const memory = config?.docker?.memory;
+  return typeof memory === "number" && memory > 0 ? memory * 1024 * 1024 : undefined;
+};
+
+const getConfigStorageLimit = (config?: TerminalRuntimeConfig | null) => {
+  const maxSpace = config?.docker?.maxSpace;
+  return typeof maxSpace === "number" && maxSpace > 0 ? maxSpace * 1024 * 1024 * 1024 : undefined;
 };
 
 const formatNetworkSpeed = (bytes?: number) =>
@@ -65,11 +138,13 @@ const formatTrafficUsage = (bytes?: number) =>
   prettyBytes(bytes ?? 0, { ...prettyBytesConfig, binary: false });
 
 const cards = computed<PerfCardItem[]>(() => {
-  const info = props.info;
-  if (!info || props.isStopped) return [];
+  const info = props.info ?? {};
+  const showConfiguredResources = isDockerInstance(props.config);
+  if (!props.info && !showConfiguredResources) return [];
 
   const {
     cpuUsage,
+    cpuLimit,
     memoryUsage,
     memoryLimit,
     memoryUsagePercent,
@@ -81,45 +156,49 @@ const cards = computed<PerfCardItem[]>(() => {
     storageLimit
   } = info;
 
-  const cpuStatus =
-    cpuUsage != null && cpuUsage > 600
-      ? "error"
-      : cpuUsage != null && cpuUsage > 200
-      ? "warning"
-      : "normal";
-  const cpuPercent = Math.min(parseInt(String(cpuUsage ?? 0)), 100);
-  const memPercent = Math.min(memoryUsagePercent ?? 0, 100);
-  const storagePercent =
-    storageUsage && storageLimit ? Math.min((storageUsage / storageLimit) * 100, 100) : 0;
+  const finalCpuUsage = cpuUsage ?? (showConfiguredResources ? 0 : undefined);
+  const finalCpuLimit = cpuLimit ?? getConfigCpuLimit(props.config);
+  const finalMemoryUsage = memoryUsage ?? (showConfiguredResources ? 0 : undefined);
+  const finalMemoryLimit = getConfigMemoryLimit(props.config) ?? memoryLimit;
+  const finalStorageUsage = storageUsage ?? (showConfiguredResources ? 0 : undefined);
+  const finalStorageLimit = storageLimit ?? getConfigStorageLimit(props.config);
+
+  const cpuStatus = getCpuStatus(finalCpuUsage, finalCpuLimit);
+  const cpuPercent = getUsagePercent(finalCpuUsage, finalCpuLimit);
+  const memPercent =
+    finalMemoryUsage != null && finalMemoryLimit
+      ? getUsagePercent(finalMemoryUsage, finalMemoryLimit)
+      : Math.min(memoryUsagePercent ?? 0, 100);
+  const storagePercent = getUsagePercent(finalStorageUsage, finalStorageLimit);
 
   const items: (PerfCardItem | null)[] = [
-    cpuUsage != null
+    finalCpuUsage != null
       ? {
           key: "cpu",
           label: t("TXT_CODE_b862a158"),
-          value: `${parseInt(String(cpuUsage))}%`,
+          value: formatPercentUsage(finalCpuUsage, finalCpuLimit),
           icon: BlockOutlined,
           theme: `perf-card--cpu-${cpuStatus}`,
           barPercent: cpuPercent
         }
       : null,
 
-    memoryUsage != null
+    finalMemoryUsage != null
       ? {
           key: "memory",
           label: t("TXT_CODE_593ee330"),
-          value: formatMemoryUsage(memoryUsage, memoryLimit),
+          value: formatByteUsage(finalMemoryUsage, finalMemoryLimit),
           icon: DashboardOutlined,
           theme: "perf-card--memory",
           barPercent: memPercent
         }
       : null,
 
-    storageUsage
+    finalStorageUsage != null
       ? {
           key: "disk",
           label: t("TXT_CODE_DISK_USAGE"),
-          value: formatMemoryUsage(storageUsage || 0, storageLimit || 0),
+          value: formatByteUsage(finalStorageUsage, finalStorageLimit),
           icon: HddOutlined,
           theme: "perf-card--disk",
           barPercent: storagePercent
@@ -185,7 +264,7 @@ const cards = computed<PerfCardItem[]>(() => {
 .perf-cards {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 6px;
 }

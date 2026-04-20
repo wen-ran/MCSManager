@@ -359,8 +359,12 @@ onUnmounted(() => {
         </template>
       </BetweenMenus>
     </div>
-    <div class="mb-10 justify-end">
-      <TerminalTopTags :info="instanceInfo?.info" :is-stopped="isStopped" />
+    <div class="mb-10">
+      <TerminalTopTags
+        :info="instanceInfo?.info"
+        :config="instanceInfo?.config"
+        :is-stopped="isStopped"
+      />
     </div>
     <TerminalCore
       v-if="instanceId && daemonId"
@@ -418,7 +422,11 @@ onUnmounted(() => {
     </template>
     <template #body>
       <div class="mb-6">
-        <TerminalTopTags :info="instanceInfo?.info" :is-stopped="isStopped" />
+        <TerminalTopTags
+          :info="instanceInfo?.info"
+          :config="instanceInfo?.config"
+          :is-stopped="isStopped"
+        />
       </div>
       <TerminalCore
         v-if="instanceId && daemonId"

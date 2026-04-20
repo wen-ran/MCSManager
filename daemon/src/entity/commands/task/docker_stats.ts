@@ -1,5 +1,6 @@
 import Dockerode from "dockerode";
 import { DefaultDocker } from "../../../service/docker_service";
+import { convertGBToBytes } from "../../../service/disk_limit_service";
 import Instance from "../../instance/instance";
 import { ILifeCycleTask } from "../../instance/life_cycle";
 
@@ -110,6 +111,16 @@ export default class DockerStatsTask implements ILifeCycleTask {
     return 0;
   }
 
+  private getCpuLimit(dockerConfig?: IGlobalInstanceDockerConfig) {
+    if (typeof dockerConfig?.cpuLimit === "number" && dockerConfig.cpuLimit > 0) {
+      return Math.round(dockerConfig.cpuLimit * 100);
+    }
+    if (typeof dockerConfig?.cpuUsage === "number" && dockerConfig.cpuUsage > 0) {
+      return dockerConfig.cpuUsage;
+    }
+    return undefined;
+  }
+
   async updateStats(containerId: string, instance: Instance) {
     if (this.isUpdating) {
       return;
@@ -142,6 +153,7 @@ export default class DockerStatsTask implements ILifeCycleTask {
 
       const result = {
         cpuUsage: this.getCpuUsage(stats),
+        cpuLimit: this.getCpuLimit(instance.config.docker),
         rxBytes,
         txBytes,
         rxRate,
@@ -180,6 +192,7 @@ export default class DockerStatsTask implements ILifeCycleTask {
     instance.info = {
       ...instance.info,
       cpuUsage: undefined,
+      cpuLimit: undefined,
       rxBytes: undefined,
       txBytes: undefined,
       rxRate: undefined,
@@ -190,7 +203,7 @@ export default class DockerStatsTask implements ILifeCycleTask {
       readBytes: undefined,
       writeBytes: undefined,
       storageUsage: 0,
-      storageLimit: instance.config.docker?.maxSpace ?? 0
+      storageLimit: convertGBToBytes(Number(instance.config.docker?.maxSpace) || 0)
     };
   }
 }

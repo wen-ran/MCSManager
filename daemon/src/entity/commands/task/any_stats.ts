@@ -1,4 +1,4 @@
-import disk_limit_service from "../../../service/disk_limit_service";
+import disk_limit_service, { convertGBToBytes } from "../../../service/disk_limit_service";
 import Instance from "../../instance/instance";
 import { ILifeCycleTask } from "../../instance/life_cycle";
 
@@ -9,6 +9,7 @@ export default class InstanceDiskCheckTask implements ILifeCycleTask {
   private task: any = null;
 
   async start(instance: Instance) {
+    disk_limit_service.checkInstanceDiskSize(instance);
     this.task = setInterval(() => {
       disk_limit_service.checkInstanceDiskSize(instance);
     }, 1000 * 45);
@@ -19,7 +20,7 @@ export default class InstanceDiskCheckTask implements ILifeCycleTask {
     instance.info = {
       ...instance.info,
       storageUsage: 0,
-      storageLimit: instance.config.docker?.maxSpace ?? 0
+      storageLimit: convertGBToBytes(Number(instance.config.docker?.maxSpace) || 0)
     };
   }
 }

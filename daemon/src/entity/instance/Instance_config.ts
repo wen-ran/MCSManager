@@ -78,6 +78,7 @@ export default class InstanceConfig implements IGlobalInstanceConfig {
     memorySwappiness: undefined,
     networkMode: "bridge",
     networkAliases: [],
+    cpuLimit: undefined,
     cpusetCpus: "",
     cpuUsage: 0,
     maxSpace: 0,

@@ -138,6 +138,7 @@ export const defaultDockerConfig: IGlobalInstanceDockerConfig = {
   io: undefined,
   networkMode: "bridge",
   networkAliases: [],
+  cpuLimit: undefined,
   cpusetCpus: "",
   cpuUsage: undefined,
   workingDir: "/data",
